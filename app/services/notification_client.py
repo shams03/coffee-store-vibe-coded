@@ -30,6 +30,7 @@ async def send_notification(status: str) -> tuple[int, dict[str, Any]]:
                 "notification_response",
                 extra={"notification_response": {"status_code": resp.status_code, "body": body}, "status": status},
             )
+            print(f"Notification response: status_code={resp.status_code}, body={body}")
             return resp.status_code, body
     except Exception as e:
         logger.exception("notification_request_failed", extra={"error": str(e), "url": url})

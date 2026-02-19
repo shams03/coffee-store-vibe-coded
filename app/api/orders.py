@@ -19,17 +19,38 @@ from app.services.order_service import create_order_with_payment, update_order_s
 router = APIRouter(prefix="/orders", tags=["orders"])
 
 
-def _order_to_response(order: Order) -> OrderResponse:
-    items = [
-        OrderItemResponse(
-            product_id=it.product_id,
-            variation_id=it.variation_id,
-            quantity=it.quantity,
-            unit_price_cents=it.unit_price_cents,
-            line_total_cents=it.quantity * it.unit_price_cents,
-        )
-        for it in order.items
-    ]
+async def _order_to_response(order: Order, session: AsyncSession = None) -> OrderResponse:
+    items = []
+    if session is not None:
+        from app.repositories.product_repo import ProductRepository
+        product_repo = ProductRepository(session)
+        import asyncio
+        async def enrich_item(it):
+            product = await product_repo.get_product_by_id(it.product_id)
+            variation = await product_repo.get_variation_by_id(it.variation_id)
+            return OrderItemResponse(
+                product_id=it.product_id,
+                variation_id=it.variation_id,
+                quantity=it.quantity,
+                unit_price_cents=it.unit_price_cents,
+                line_total_cents=it.quantity * it.unit_price_cents,
+                product_name=product.name if product else None,
+                variation_name=variation.name if variation else None,
+                variation_price_change_cents=variation.price_change_cents if variation else None,
+                product_base_price_cents=product.base_price_cents if product else None,
+            )
+        items = await asyncio.gather(*[enrich_item(it) for it in order.items])
+    else:
+        items = [
+            OrderItemResponse(
+                product_id=it.product_id,
+                variation_id=it.variation_id,
+                quantity=it.quantity,
+                unit_price_cents=it.unit_price_cents,
+                line_total_cents=it.quantity * it.unit_price_cents,
+            )
+            for it in order.items
+        ]
     payment_schema = None
     if order.payment:
         payment_schema = PaymentInfoSchema(
@@ -75,16 +96,17 @@ async def place_order(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Total mismatch: computed {total_computed}, received {body.total_cents}",
         )
-    order, payment, err, is_replay = await create_order_with_payment(
+    order, payment, err = await create_order_with_payment(
         session, current_user.id, body.items, body.metadata, idempotency_key
     )
+    is_replay = False
     if err is not None:
         raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=err)
     if order is None:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Payment succeeded but order not created")
     repo = OrderRepository(session)
     order = await repo.get_by_id(order.id)
-    response = _order_to_response(order)
+    response = await _order_to_response(order, session)
     if is_replay:
         return JSONResponse(content=response.model_dump(mode="json"), status_code=200)
     return response
@@ -108,7 +130,7 @@ async def get_order(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
     if current_user.role == UserRole.CUSTOMER and order.customer_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
-    return _order_to_response(order)
+    return await _order_to_response(order, session)
 
 
 @router.patch(

@@ -33,6 +33,7 @@ async def request_payment(total_cents: int) -> tuple[int, dict[str, Any]]:
                     "request_value_cents": total_cents,
                 },
             )
+            print(f"Payment response: status_code={resp.status_code}, body={body}")
             return resp.status_code, body
     except Exception as e:
         logger.exception("payment_request_failed", extra={"error": str(e), "url": url})

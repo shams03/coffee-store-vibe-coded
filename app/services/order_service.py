@@ -113,7 +113,7 @@ async def create_order_with_payment(
             await idem_repo.link_order_and_payment(key_row, order.id, payment.id)
 
     await session.flush()
-    return order, payment, None, False
+    return order, payment, None
 
 
 async def update_order_status_and_notify(
@@ -141,8 +141,10 @@ async def update_order_status_and_notify(
             f"only next allowed is {allowed.value if allowed else 'none'}."
         )
 
-    order_repo.update_status(order, new_status)
+    print(f"[DEBUG] Attempting to update order {order.id} from status {order.status} to {new_status}")
+    await order_repo.update_status(order, new_status)
     await session.flush()
+    print(f"[DEBUG] Order {order.id} status after update: {order.status}")
 
     # Notification: fire-and-forget style; store result; don't fail the request
     status_code, response_body = await send_notification(new_status.value)
@@ -154,4 +156,6 @@ async def update_order_status_and_notify(
     )
     session.add(notif)
     await session.flush()
+    await session.commit()
+    print(f"[DEBUG] Order {order.id} committed with status: {order.status}")
     return order, None

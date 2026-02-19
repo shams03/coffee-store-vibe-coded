@@ -63,5 +63,17 @@ class OrderRepository:
         )
         return list(r.scalars().all())
 
+    async def get_all_orders(self) -> list[Order]:
+        r = await self.session.execute(
+            select(Order)
+            .options(
+                selectinload(Order.items),
+                selectinload(Order.customer),
+                selectinload(Order.payment),
+            )
+            .order_by(Order.created_at.desc())
+        )
+        return list(r.scalars().all())
+
     async def update_status(self, order: Order, new_status: OrderStatus) -> None:
         order.status = new_status

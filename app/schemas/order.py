@@ -26,6 +26,10 @@ class OrderItemResponse(BaseModel):
     quantity: int
     unit_price_cents: int
     line_total_cents: int
+    product_name: Optional[str] = None
+    variation_name: Optional[str] = None
+    variation_price_change_cents: Optional[int] = None
+    product_base_price_cents: Optional[int] = None
 
 
 class PaymentInfoSchema(BaseModel):

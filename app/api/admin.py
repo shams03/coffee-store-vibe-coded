@@ -12,6 +12,8 @@ from app.db import get_db
 from app.models.user import User, UserRole
 from app.models.product import Product, ProductVariation
 from app.schemas.menu import ProductMenuSchema, VariationSchema
+from app.repositories.order_repo import OrderRepository
+from app.schemas.order import OrderResponse, OrderItemResponse, PaymentInfoSchema
 from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -111,3 +113,35 @@ async def delete_product(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
     await session.delete(product)
     await session.flush()
+
+
+@router.get("/orders", response_model=list[OrderResponse])
+async def get_all_orders(
+    current_user: User = require_role(UserRole.MANAGER),
+    session: AsyncSession = Depends(get_db),
+) -> list[OrderResponse]:
+    repo = OrderRepository(session)
+    orders = await repo.get_all_orders()
+    return [OrderResponse(
+        id=o.id,
+        customer_id=o.customer_id,
+        status=o.status.value if hasattr(o.status, 'value') else str(o.status),
+        total_cents=o.total_cents,
+        metadata=o.metadata_,
+        created_at=o.created_at.isoformat(),
+        items=[
+            OrderItemResponse(
+                product_id=i.product_id,
+                variation_id=i.variation_id,
+                quantity=i.quantity,
+                unit_price_cents=i.unit_price_cents,
+                line_total_cents=i.unit_price_cents * i.quantity,
+                # Optionally add product_name, variation_name, etc. if needed
+            ) for i in o.items
+        ],
+        payment=PaymentInfoSchema(
+            id=o.payment.id,
+            amount_cents=o.payment.amount_cents,
+            response_status_code=o.payment.response_status_code
+        ) if o.payment else None
+    ) for o in orders]
