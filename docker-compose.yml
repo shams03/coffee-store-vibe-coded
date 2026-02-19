@@ -1,0 +1,65 @@
+# Local dev: Postgres, app, migrations. Reference: Trio technical challenge.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: coffee_user
+      POSTGRES_PASSWORD: coffee_pass
+      POSTGRES_DB: coffee_shop
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U coffee_user -d coffee_shop"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+asyncpg://coffee_user:coffee_pass@db:5432/coffee_shop
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-secret-key-min-32-characters-long}
+      PAYMENT_SERVICE_URL: ${PAYMENT_SERVICE_URL:-https://challenge.trio.dev/api/v1/payment}
+      NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL:-https://challenge.trio.dev/api/v1/notification}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+  migrate:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+asyncpg://coffee_user:coffee_pass@db:5432/coffee_shop
+    depends_on:
+      db:
+        condition: service_healthy
+    command: alembic upgrade head
+    profiles:
+      - tools
+
+  seed:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+asyncpg://coffee_user:coffee_pass@db:5432/coffee_shop
+    depends_on:
+      - migrate
+    entrypoint: ["python", "-m", "scripts.seed_catalog"]
+    profiles:
+      - tools
+
+  seed-users:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+asyncpg://coffee_user:coffee_pass@db:5432/coffee_shop
+    depends_on:
+      - migrate
+    entrypoint: ["python", "-m", "scripts.seed_users"]
+    profiles:
+      - tools
+
+volumes:
+  pgdata: {}
