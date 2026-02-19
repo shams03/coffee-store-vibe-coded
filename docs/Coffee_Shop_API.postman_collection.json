@@ -1,0 +1,211 @@
+{
+  "info": {
+    "name": "Coffee Shop Order API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8000" },
+    { "key": "customer_token", "value": "" },
+    { "key": "manager_token", "value": "" },
+    { "key": "order_id", "value": "" },
+    { "key": "product_id", "value": "" },
+    { "key": "variation_id", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Health & Meta",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/health",
+            "header": []
+          }
+        },
+        {
+          "name": "Metrics",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/metrics",
+            "header": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "Menu",
+      "item": [
+        {
+          "name": "GET Menu (no auth)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/menu",
+            "header": [],
+            "description": "Copy product_id and variation_id from response for POST Order."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login Customer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": "var j = pm.response.json(); if (j.access_token) pm.collectionVariables.set('customer_token', j.access_token);"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/auth/token",
+            "header": [ { "key": "Content-Type", "value": "application/x-www-form-urlencoded" } ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "username", "value": "customer@example.com" },
+                { "key": "password", "value": "customer123" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Login Manager",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": "var j = pm.response.json(); if (j.access_token) pm.collectionVariables.set('manager_token', j.access_token);"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/auth/token",
+            "header": [ { "key": "Content-Type", "value": "application/x-www-form-urlencoded" } ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "username", "value": "manager@example.com" },
+                { "key": "password", "value": "manager123" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "POST Order (Customer)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": "var j = pm.response.json(); if (j.id) pm.collectionVariables.set('order_id', j.id);"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/orders",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{customer_token}}" },
+              { "key": "Idempotency-Key", "value": "postman-order-001" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"product_id\": \"{{product_id}}\",\n      \"variation_id\": \"{{variation_id}}\",\n      \"quantity\": 1\n    }\n  ],\n  \"metadata\": {},\n  \"total_cents\": null\n}"
+            },
+            "description": "Set product_id and variation_id from GET Menu response (same product)."
+          }
+        },
+        {
+          "name": "GET Order by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/orders/{{order_id}}",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customer_token}}" }
+            ]
+          }
+        },
+        {
+          "name": "PATCH Order Status (Manager)",
+          "request": {
+            "method": "PATCH",
+            "url": "{{base_url}}/api/v1/orders/{{order_id}}/status",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{manager_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"preparation\"\n}"
+            },
+            "description": "Use preparation, then ready, then delivered in order."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin Products",
+      "item": [
+        {
+          "name": "POST Create Product",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": "var j = pm.response.json(); if (j.id) pm.collectionVariables.set('product_id', j.id);"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/admin/products",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{manager_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Mocha\",\n  \"base_price_cents\": 500,\n  \"variations\": [\n    { \"name\": \"Small\", \"price_change_cents\": 0 },\n    { \"name\": \"Large\", \"price_change_cents\": 80 }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "PATCH Update Product",
+          "request": {
+            "method": "PATCH",
+            "url": "{{base_url}}/api/v1/admin/products/{{product_id}}",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{manager_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Mocha Updated\",\n  \"base_price_cents\": 550\n}"
+            }
+          }
+        },
+        {
+          "name": "DELETE Product",
+          "request": {
+            "method": "DELETE",
+            "url": "{{base_url}}/api/v1/admin/products/{{product_id}}",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{manager_token}}" }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
