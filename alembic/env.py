@@ -1,5 +1,5 @@
 """
-Alembic async environment for Trio Coffee Shop Order API.
+Alembic async environment.
 Uses SQLAlchemy 2.x async engine; migrations run with asyncio.
 """
 from logging.config import fileConfig
@@ -9,14 +9,12 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-# Import app config and base for autogenerate
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.config import get_settings
 from app.db import Base
-import app.models  # noqa: F401 - register models with Base.metadata
 
 config = context.config
 if config.config_file_name is not None:

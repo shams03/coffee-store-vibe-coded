@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 30
 
-    # External services (Trio challenge spec)
+    # External services
     payment_service_url: str = "https://challenge.trio.dev/api/v1/payment"
     notification_service_url: str = "https://challenge.trio.dev/api/v1/notification"
 

@@ -1,6 +1,7 @@
 """
-POST /api/v1/auth/token — login, returns JWT with role claim.
+POST auth — login, returns JWT with role claim.
 """
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +13,11 @@ from app.repositories.user_repo import UserRepository
 from app.schemas.auth import TokenResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+# Security considerations for production:
+# - Add a /token/refresh endpoint using short-lived access plus long-lived refresh tokens
+# - Consider logging failed login attempts for security monitoring
 
 
 @router.post(

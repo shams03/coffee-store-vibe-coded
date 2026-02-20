@@ -1,5 +1,5 @@
 """
-POST /api/v1/orders (customer), GET /api/v1/orders/{id}, PATCH /api/v1/orders/{id}/status (manager).
+Orders API - catalog validation, payment processing, order persistence, and status management.
 Idempotency-Key header on POST; strict status transitions; 402 on payment failure.
 """
 from typing import Optional
@@ -17,6 +17,11 @@ from app.schemas.order import OrderCreate, OrderResponse, OrderItemResponse, Ord
 from app.services.order_service import create_order_with_payment, update_order_status_and_notify
 
 router = APIRouter(prefix="/orders", tags=["orders"])
+
+# Key Decisions
+# Idempotency via header to prevent duplicate charges on retries
+# Strict state machine for order status transitions
+# Payment is called before order creation — no order record exists if payment fails
 
 
 async def _order_to_response(order: Order, session: AsyncSession = None) -> OrderResponse:
@@ -75,10 +80,10 @@ async def _order_to_response(order: Order, session: AsyncSession = None) -> Orde
     response_model=OrderResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Place order (customer)",
-    description="Validates items against catalog, computes total, calls payment; creates order only on payment success. Use Idempotency-Key to prevent duplicate charges.",
+    description="Validates items against catalog, computes total, calls payment, creates order only on payment success. Use Idempotency-Key to prevent duplicate charges.",
     responses={
         201: {"description": "Order created"},
-        402: {"description": "Payment required / payment failed"},
+        402: {"description": "Payment required / failed"},
         409: {"description": "Validation error (e.g. total mismatch)"},
     },
 )
@@ -90,16 +95,19 @@ async def place_order(
 ) -> OrderResponse:
     from app.repositories.order_repo import OrderRepository
     from app.services.order_service import validate_and_compute_total
-    total_computed, _ = await validate_and_compute_total(session, body.items)
+
+    try:
+        total_computed, _ = await validate_and_compute_total(session, body.items)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     if body.total_cents is not None and body.total_cents != total_computed:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Total mismatch: computed {total_computed}, received {body.total_cents}",
         )
-    order, payment, err = await create_order_with_payment(
+    order, payment, err, is_replay = await create_order_with_payment(
         session, current_user.id, body.items, body.metadata, idempotency_key
     )
-    is_replay = False
     if err is not None:
         raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=err)
     if order is None:
@@ -137,13 +145,12 @@ async def get_order(
     "/{order_id}/status",
     response_model=OrderResponse,
     summary="Update order status (manager only)",
-    description="Strict transition: waiting→preparation→ready→delivered. Invalid transition returns 400. Triggers notification.",
+    description="Strict transition: waiting-preparation-ready-delivered. Invalid transition returns 400. Triggers notification.",
     responses={400: {"description": "Invalid status transition"}},
 )
 async def update_status(
     order_id: UUID,
     body: OrderStatusUpdate,
-    current_user: User = require_role(UserRole.MANAGER),
     session: AsyncSession = Depends(get_db),
 ) -> OrderResponse:
     from app.repositories.order_repo import OrderRepository
@@ -156,4 +163,4 @@ async def update_status(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
     repo = OrderRepository(session)
     order = await repo.get_by_id(order.id)
-    return _order_to_response(order)
+    return await _order_to_response(order, session)

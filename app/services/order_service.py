@@ -22,7 +22,7 @@ from app.services.notification_client import send_notification
 
 logger = logging.getLogger(__name__)
 
-# Allowed status transitions (Trio spec)
+# Allowed status transitions
 VALID_TRANSITIONS = {
     OrderStatus.WAITING: OrderStatus.PREPARATION,
     OrderStatus.PREPARATION: OrderStatus.READY,
@@ -81,7 +81,7 @@ async def create_order_with_payment(
     # Call payment first (before creating order)
     status_code, response_body = await request_payment(total_cents)
     if status_code < 200 or status_code >= 300:
-        return None, None, f"Payment failed: {status_code} — {response_body}"
+        return None, None, f"Payment failed: {status_code} — {response_body}", False
 
     # Atomic: order + items + payment + idempotency
     order = await order_repo.create(customer_id, total_cents, metadata)
@@ -113,7 +113,7 @@ async def create_order_with_payment(
             await idem_repo.link_order_and_payment(key_row, order.id, payment.id)
 
     await session.flush()
-    return order, payment, None
+    return order, payment, None, False
 
 
 async def update_order_status_and_notify(
@@ -141,10 +141,8 @@ async def update_order_status_and_notify(
             f"only next allowed is {allowed.value if allowed else 'none'}."
         )
 
-    print(f"[DEBUG] Attempting to update order {order.id} from status {order.status} to {new_status}")
     await order_repo.update_status(order, new_status)
     await session.flush()
-    print(f"[DEBUG] Order {order.id} status after update: {order.status}")
 
     # Notification: fire-and-forget style; store result; don't fail the request
     status_code, response_body = await send_notification(new_status.value)
@@ -157,5 +155,4 @@ async def update_order_status_and_notify(
     session.add(notif)
     await session.flush()
     await session.commit()
-    print(f"[DEBUG] Order {order.id} committed with status: {order.status}")
     return order, None

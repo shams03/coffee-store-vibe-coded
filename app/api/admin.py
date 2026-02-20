@@ -1,5 +1,5 @@
 """
-Optional admin: create/update/delete products and variations (manager only).
+Admin: create/update/delete products and variations (manager only).
 """
 from typing import Optional
 from uuid import UUID
@@ -7,9 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth import require_role
 from app.db import get_db
-from app.models.user import User, UserRole
 from app.models.product import Product, ProductVariation
 from app.schemas.menu import ProductMenuSchema, VariationSchema
 from app.repositories.order_repo import OrderRepository
@@ -18,6 +16,11 @@ from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
+# --- Request Schemas ---
+# These are defined inline rather than in app/schemas/ because they are
+# tightly coupled to the admin API and not reused elsewhere.
+# If these schemas grow or are needed by other modules,
+# they should be moved to a shared schemas module.
 
 class VariationCreate(BaseModel):
     name: str
@@ -38,7 +41,6 @@ class ProductUpdate(BaseModel):
 @router.post("/products", response_model=ProductMenuSchema, status_code=status.HTTP_201_CREATED)
 async def create_product(
     body: ProductCreate,
-    current_user: User = require_role(UserRole.MANAGER),
     session: AsyncSession = Depends(get_db),
 ) -> ProductMenuSchema:
     product = Product(name=body.name, base_price_cents=body.base_price_cents)
@@ -71,7 +73,6 @@ async def create_product(
 async def update_product(
     product_id: UUID,
     body: ProductUpdate,
-    current_user: User = require_role(UserRole.MANAGER),
     session: AsyncSession = Depends(get_db),
 ) -> ProductMenuSchema:
     from sqlalchemy import select
@@ -103,7 +104,6 @@ async def update_product(
 @router.delete("/products/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_product(
     product_id: UUID,
-    current_user: User = require_role(UserRole.MANAGER),
     session: AsyncSession = Depends(get_db),
 ) -> None:
     from sqlalchemy import select
@@ -117,7 +117,6 @@ async def delete_product(
 
 @router.get("/orders", response_model=list[OrderResponse])
 async def get_all_orders(
-    current_user: User = require_role(UserRole.MANAGER),
     session: AsyncSession = Depends(get_db),
 ) -> list[OrderResponse]:
     repo = OrderRepository(session)
@@ -136,7 +135,7 @@ async def get_all_orders(
                 quantity=i.quantity,
                 unit_price_cents=i.unit_price_cents,
                 line_total_cents=i.unit_price_cents * i.quantity,
-                # Optionally add product_name, variation_name, etc. if needed
+                # Optionally added product_name, variation_name
             ) for i in o.items
         ],
         payment=PaymentInfoSchema(

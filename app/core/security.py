@@ -1,4 +1,4 @@
-"""Password hashing (argon2) for user auth."""
+"""Password hashing for user auth."""
 from passlib.context import CryptContext
 
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")

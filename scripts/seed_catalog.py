@@ -15,11 +15,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 # Catalog as per spec: product name -> base_price_cents, list of (variation_name, price_change_cents)
 CATALOG = [
-    ("Latte", 450, [("Small", 0), ("Medium", 50), ("Large", 100)]),
-    ("Espresso", 350, [("Single", 0), ("Double", 100)]),
-    ("Macchiato", 400, [("Small", 0), ("Large", 80)]),
-    ("Iced Coffee", 400, [("Regular", 0), ("Large", 50)]),
-    ("Donuts", 300, [("Glazed", 0), ("Chocolate", 50), ("Sugar", 30)]),
+    ("Latte", 400, [("Pumpkin Spice", 50),("Vanilla", 30), ("Hazelnut", 40)]),
+    ("Espresso", 250, [("Single Shot", 0), ("Double Shot", 100)]),
+    ("Macchiato", 400, [("Caramel", 50), ("Vanilla", 30)]),
+    ("Iced Coffee", 350, [("Regular", 0), ("Sweetened", 30), ("Extra Ice", 20)]),
+    ("Donuts", 200, [("Glazed", 0), ("Jelly", 30), ("Boston Cream", 50)]),
 ]
 
 

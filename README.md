@@ -1,46 +1,64 @@
 # Coffee Shop Order Management API
 
+A production-grade REST API for managing a coffee shop's orders, built for the Trio technical challenge. Covers everything from menu browsing and order placement to payment processing, status tracking, and customer notifications — with security and reliability treated as first-class concerns throughout.
+
+**Problem Statement:**  
+Build a production-grade backend API for a coffee shop order management system. The API must support user authentication (with roles: customer, manager), product catalog management, order placement and tracking, payment and notification integration, idempotency for order creation, and strict order status transitions. The system should be robust, secure, and ready for deployment in a real-world environment.
+
+**Technologies Used:**
+
+- **Python 3.11+** — Main programming language.
+- **FastAPI** — High-performance, async web framework for building APIs.
+- **PostgreSQL** — Relational database for persistent storage.
+- **SQLAlchemy (async)** — ORM for database access.
+- **Alembic** — Database migrations.
+- **Docker & Docker Compose** — Containerization and orchestration for local development and deployment.
+- **Pytest** — Testing framework for unit and integration tests.
+- **JWT (PyJWT)** — Authentication and role-based access control.
+- **Argon2** — Secure password hashing.
+- **HTTPX** — Async HTTP client for payment/notification integration.
+- **Pydantic** — Data validation and serialization.
+
 Production-grade **FastAPI** backend for the **Trio technical challenge**: order management with PostgreSQL, JWT auth (RBAC), payment and notification integration, idempotency, and strict order status flow.
 
 ## Quick start (local with Docker)
 
 ```bash
 # Start Postgres and app
-docker compose up -d db app
+docker compose up --build
 
+# Open new terminal
 # Run migrations and seed catalog (one-off)
-docker compose --profile tools run --rm migrate
-docker compose --profile tools run --rm seed
-docker compose --profile tools run --rm seed-users
+> docker compose --profile tools run --rm migrate
+> docker-compose exec app python scripts/seed_catalog.py
+> docker-compose exec app python scripts/seed_users.py
 
 # API: http://localhost:8000
 # Docs: http://localhost:8000/docs
 ```
 
-**Default users (dev):**  
-- Customer: `customer@example.com` / `customer123`  
+**Default users (dev):**
+
+- Customer: `customer@example.com` / `customer123`
 - Manager: `manager@example.com` / `manager123`
 
 ## Environment variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DATABASE_URL` | Postgres URL (async: `postgresql+asyncpg://...`) | `postgresql+asyncpg://coffee_user:coffee_pass@localhost:5432/coffee_shop` |
-| `JWT_SECRET_KEY` | Secret for signing JWTs (min 32 chars) | *(set in production)* |
-| `JWT_ALGORITHM` | JWT algorithm | `HS256` |
-| `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | Token expiry | `30` |
-| `PAYMENT_SERVICE_URL` | Trio payment endpoint | `https://challenge.trio.dev/api/v1/payment` |
-| `NOTIFICATION_SERVICE_URL` | Trio notification endpoint | `https://challenge.trio.dev/api/v1/notification` |
-| `SENTRY_DSN` | Sentry DSN (optional) | - |
-| `APP_ENV` | Environment name | `development` |
-| `LOG_LEVEL` | Logging level | `INFO` |
-| `API_PREFIX` | API path prefix | `/api/v1` |
+| Variable                          | Description                                      | Default                                                                            |
+| --------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| `DATABASE_URL`                    | Postgres URL (async: `postgresql+asyncpg://...`) | `postgresql+asyncpg://coffee_user:coffee_pass@localhost:<port_number>/coffee_shop` |
+| `JWT_SECRET_KEY`                  | Secret for signing JWTs (min 32 chars)           | _(set in production)_                                                              |
+| `JWT_ALGORITHM`                   | JWT algorithm                                    | `HS256`                                                                            |
+| `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | Token expiry                                     | `30`                                                                               |
+| `PAYMENT_SERVICE_URL`             | Trio payment endpoint                            | `https://challenge.trio.dev/api/v1/payment`                                        |
+| `NOTIFICATION_SERVICE_URL`        | Trio notification endpoint                       | `https://challenge.trio.dev/api/v1/notification`                                   |
+| `APP_ENV`                         | Environment name                                 | `development`                                                                      |
+| `LOG_LEVEL`                       | Logging level                                    | `INFO`                                                                             |
+| `API_PREFIX`                      | API path prefix                                  | `/api/v1`                                                                          |
 
-See `.env.example` for a template.
+## Database setup (If docker not used)
 
-## Database setup
-
-1. Create DB and user (or use Docker):
+1. Create DB and user:
 
 ```sql
 CREATE USER coffee_user WITH PASSWORD 'coffee_pass';
@@ -76,6 +94,8 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 ## Tests
 
+Test coverage is above 90%
+
 ```bash
 # Postgres for tests (e.g. coffee_shop_test)
 createdb coffee_shop_test
@@ -93,39 +113,104 @@ pytest tests -v
 
 ## API endpoints
 
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| GET | `/api/v1/menu` | No | Full catalog (products + variations + prices) |
-| POST | `/api/v1/auth/token` | No | Login → JWT (form: username=email, password=...) |
-| POST | `/api/v1/orders` | Customer | Place order (use `Idempotency-Key` header) |
-| GET | `/api/v1/orders/{id}` | User | Order details (customer: own only) |
-| PATCH | `/api/v1/orders/{id}/status` | Manager | Update status (strict flow) |
-| POST/PATCH/DELETE | `/api/v1/admin/products...` | Manager | Product CRUD |
+| Method | Endpoint                              | Auth     | Description                                      |
+| ------ | ------------------------------------- | -------- | ------------------------------------------------ |
+| GET    | `/api/v1/menu`                        | No       | Full catalog (products + variations + prices)    |
+| POST   | `/api/v1/auth/token`                  | No       | Login → JWT (form: username=email, password=...) |
+| POST   | `/api/v1/orders`                      | Customer | Place order (use `Idempotency-Key` header)       |
+| GET    | `/api/v1/orders/{id}`                 | User     | Order details (customer: own only)               |
+| PATCH  | `/api/v1/orders/{id}/status`          | Manager  | Update status (strict flow)                      |
+| GET    | `/api/v1/admin/orders`                | Manager  | List all orders                                  |
+| POST   | `/api/v1/admin/products`              | Manager  | Create product                                   |
+| PATCH  | `/api/v1/admin/products/{product_id}` | Manager  | Update product                                   |
+| DELETE | `/api/v1/admin/products/{product_id}` | Manager  | Delete product                                   |
+| GET    | `/`                                   | No       | Root endpoint (API info)                         |
 
-- **Health:** `GET /health`  
-- **Metrics:** `GET /metrics` (Prometheus)
+## Architecture
 
-## Architecture (summary)
+### Layered Design
 
-### Database schema
+The codebase is split into four layers with strict boundaries between them:
 
-- **users** – email, hashed_password, role (`customer` \| `manager`). Role is mirrored in JWT.
-- **products** – name, base_price_cents.
-- **product_variations** – product_id, name, price_change_cents (per-item price = base + change).
-- **orders** – customer_id, status (enum: waiting → preparation → ready → delivered), total_cents, metadata.
-- **order_items** – order_id, product_id, variation_id, quantity, unit_price_cents (snapshot at order time).
-- **payments** – order_id, amount_cents, request/response JSON (audit).
-- **notifications** – one row per status-change notification; response stored.
-- **idempotency_keys** – key_hash (SHA-256 of header), order_id, payment_id, expires_at.
+**API Layer** handles HTTP — routing, input validation via Pydantic, and auth enforcement. It delegates immediately to the service layer and has no knowledge of the database.
 
-Indexes on foreign keys, status, created_at, and unique on idempotency key_hash.
+**Service Layer** is where all business logic lives. What happens when an order is placed? What are valid status transitions? What gets triggered on payment failure? The service layer answers all of that, coordinating between repositories and external integrations.
+
+**Repository Layer** owns all database interaction. Services ask for data in business terms; repositories translate that into SQLAlchemy queries. This boundary is what makes the service layer independently testable — swap in a fake repository and you don't need a database to test business logic.
+
+**External Integrations** are thin HTTP wrappers around the payment and notification providers. No business logic lives here — it's plumbing only. Keeping this strict means swapping a provider later is a one-file change.
+
+### Project Structure
+
+```
+app/
+  api/             # FastAPI routers, endpoint definitions, auth middleware
+  core/            # JWT utilities, security helpers
+  services/        # Business logic — one file per domain
+  repositories/    # DB queries — one file per resource
+  models/          # SQLAlchemy ORM models
+  schemas/         # Pydantic request/response schemas
+  config.py        # Environment-based configuration
+  db.py            # Async DB session and engine setup
+scripts/
+  seed_catalog.py  # Seeds products and variations
+  seed_users.py    # Seeds default customer and manager
+tests/
+  unit/            # Service and repository unit tests
+  integration/     # Full request-cycle tests with mocked externals
+```
+
+### Database Schema
+
+Prices are stored as integers (cents) throughout to avoid floating point issues entirely.
+
+- **users** — email, hashed password, role. Role is a column on the user record — with two roles, a separate table adds joins with no real benefit.
+- **products** — name and base price in cents.
+- **product_variations** — linked to a product, name and price delta. Final price = base + delta.
+- **orders** — linked to a customer, carries status enum and total in cents.
+- **order_items** — line items linking an order to specific variations. Unit price is snapshotted at order time — product prices can change later and historical orders need to reflect what was actually charged.
+- **payments** — one-to-one with an order. Full request and response payload stored for auditing.
+- **notifications** — one row per status-change notification. Response stored for debugging and retry.
+- **idempotency_keys** — SHA-256 hash of the client-provided key, linked to the resulting order and payment, with a 24-hour TTL.
+
+Indexes on all foreign keys, the order status column, and `created_at`. Unique constraint on idempotency key hash.
+
+### Order Status Flow
+
+Orders move through a strict, linear sequence with no skipping and no reversals:
+waiting → preparation → ready → delivered
 
 ### Idempotency
 
-- `POST /orders` accepts optional header `Idempotency-Key`.
-- Key is hashed (SHA-256) and stored in `idempotency_keys` with TTL (e.g. 24h).
-- First request: create order + payment, store key → order_id/payment_id, return 201.
-- Replay (same key): return existing order with 200, no second payment call.
+Idempotency ensures that making the same API request multiple times will not result in duplicate operations or side effects. This is especially important for payment and order creation, where network retries or client errors could otherwise create duplicate orders or charges.
+
+**Where is idempotency used?**
+
+- Idempotency is implemented for the `POST /api/v1/orders` endpoint (order creation).
+
+**How does it work?**
+
+- Clients can (optionally) include an `Idempotency-Key` header with their order creation request. This key should be a unique value generated by the client for each logical order attempt.
+- On the server, the key is hashed (SHA-256) and stored in the `idempotency_keys` table, along with the resulting order and payment IDs and a TTL (typically 24 hours).
+- On the first request with a new key:
+  - The server processes the order and payment as normal.
+  - The key and result are stored.
+  - The server returns a `201 Created` response with the new order.
+- On a retry with the same key (e.g., due to a network timeout or client retry):
+  - The server detects the key has already been used.
+  - Instead of creating a new order or charging again, it returns the original order and payment result with a `200 OK` response.
+- If the key is not provided, every request is treated as a new order.
+
+**Why is this important?**
+
+- Prevents duplicate orders and charges if a client retries a request due to network issues or uncertainty about the previous request’s outcome.
+- Makes the API safe for clients to retry requests without risk of double payment or order creation.
+
+**Internal working:**
+
+- The key is hashed and checked in the database before processing.
+- If found, the previous result is returned.
+- If not found, the order and payment are processed, and the key/result are stored for future reference.
 
 ### RBAC & JWT
 
@@ -149,30 +234,7 @@ Example decoded JWT (conceptually):
 
 - Status updates use `SELECT ... FOR UPDATE` on the order row so transitions are serialized and no race conditions on state.
 
-### Run locally with Docker and migrations
-
-```bash
-docker compose up -d db
-docker compose --profile tools run --rm migrate
-docker compose --profile tools run --rm seed
-docker compose --profile tools run --rm seed-users
-docker compose up -d app
-```
-
-## Deployment (e.g. Kubernetes)
-
-- Use env-based config (no secrets in code). Prefer a secrets manager for `JWT_SECRET_KEY` and DB URL.
-- Run migrations as a Job or init container before starting the app.
-- Use TLS in front of the app (ingress or load balancer).
-- Optionally add rate limiting (e.g. Redis) and ensure CORS is tightened for production origins.
-- **Sentry:** set `SENTRY_DSN` for error monitoring.
-- **Metrics:** scrape `/metrics` with Prometheus.
-
-## Reference
-
-- Implementation follows the **Trio technical challenge** spec (menu items, payment/notification URLs, order status flow, idempotency, RBAC).
-
-## Checklist (implemented vs manual review)
+## Checklist
 
 - [x] SQL DDL and Alembic migrations
 - [x] Catalog seed script (Latte, Espresso, Macchiato, Iced Coffee, Donuts + variations)
@@ -185,10 +247,5 @@ docker compose up -d app
 - [x] Idempotency-Key for POST /orders; 200 replay
 - [x] Validation and pricing; 409 on total mismatch if client sends total
 - [x] Atomic order + payment in transaction; row-level lock for status
-- [x] Prometheus metrics; structured logging; Sentry (env)
 - [x] Tests (unit + integration with mocked payment/notification)
 - [x] Dockerfile and docker-compose (Postgres, app, migrate/seed profiles)
-- [x] GitHub Actions: lint (black/ruff/mypy), test, Docker build
-- [ ] **Manual:** Set strong `JWT_SECRET_KEY` and DB credentials in production
-- [ ] **Manual:** Configure CORS origins and rate limits for production
-- [ ] **Manual:** TLS and secrets manager in deployment

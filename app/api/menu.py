@@ -1,5 +1,5 @@
 """
-GET /api/v1/menu — full catalog with products, variations, price changes.
+GET menu — full catalog with products, variations, price changes.
 """
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
